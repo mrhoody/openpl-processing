@@ -33,11 +33,21 @@ For `.openlifter` backups, load a copy through OpenLifter and export its OpenPow
 
 ## 3. Process and reconcile
 
-Read the fetched upstream documentation, nearby PS meets, and relevant tool usage before conversion. Reuse upstream tools: `scripts/openlifter-convert` consumes `original.csv` in the current meet directory and produces `meet.csv` and `entries.csv`. Run it only in the intended new meet directory after copying the verified export there as source evidence. For other formats, use the corresponding existing upstream converter or request clarification. Keep private backups and working artifacts local; include only source evidence appropriate for public submission under upstream conventions.
+Read the fetched upstream documentation, nearby PS meets, and relevant tool usage before conversion. Follow the PS layout: one `meet-data/ps/YYNN/` directory per meet, containing:
 
-Allocate unused PS meet directories according to current upstream conventions. Reconcile converted metadata, entry counts, identities, divisions, equipment, bodyweights, attempts, totals, and placings against the sources, accounting for all days/platforms and any legitimate repeated entries. Retain an evidence trail for corrections. Ask the user about uncertain results or identities; hold affected meets until resolved rather than guessing or deleting troublesome entries. Change a shared identity registry only when necessary for these PS entries and supported by evidence; never overwrite another lifter's identity to silence a checker error.
+- `meet.csv`: meet metadata, matching the existing PS schema.
+- `original.csv`: the unchanged source CSV, retained beside the processed data. For multiple source sessions, preserve each original with a distinct day/platform/session suffix, following PS precedents such as `original-D1AM.csv`.
+- `entries.csv`: the final processed results covering the complete meet, reconciled with all source CSVs.
+
+`YY` is the meet year's last two digits; `NN` is the zero-padded meet sequence for that year, starting at `01` (for example, `2601` is the first meet of 2026, not January). Allocate new meets in chronological meet-date order, not input filename, processing, or submission order. Check existing meets and pending submissions before assigning numbers and record the mapping in the checkpoint. Preserve published meet IDs, including historical ordering exceptions; if fitting a new meet chronologically would require renumbering existing IDs, or the ordering is ambiguous, ask the user before assigning it.
+
+Reuse upstream tools only for compatible source formats: `scripts/openlifter-convert` consumes a full OpenLifter `original.csv` export in the current meet directory and produces `meet.csv` and `entries.csv`. Run it only in the intended new meet directory after copying the verified export there as source evidence. For other formats, follow the corresponding existing upstream conversion pattern or request clarification. Keep private backups and working artifacts local; include only source evidence appropriate for public submission under upstream conventions.
+
+Reconcile converted metadata, entry counts, identities, divisions, equipment, bodyweights, attempts, totals, and placings against the sources, accounting for all days/platforms and any legitimate repeated entries. Retain an evidence trail for corrections. Ask the user about uncertain results or identities; hold affected meets until resolved rather than guessing or deleting troublesome entries. Change a shared identity registry only when necessary for these PS entries and supported by evidence; never overwrite another lifter's identity to silence a checker error.
 
 ## 4. Validate data and enforce scope
+
+For every ready meet, verify that its folder contains the metadata, original source CSV(s), and final entries; that the folder year matches the meet date; and that new meet numbers follow the agreed chronological mapping without collisions.
 
 In the data checkout, run the fetched upstream checks. Use its current `Makefile`, `tests/`, and `.gitlab-ci.yml` as the source of truth: currently `make check` runs the data and lifter checks, with `tests/check-line-endings` and `tests/check-file-sizes` providing additional CI checks. Run any other required checks selected by the changed files. Record commands and results. A missing dependency, failed check, or unavailable check is a blocker to claiming validation, not a pass.
 
