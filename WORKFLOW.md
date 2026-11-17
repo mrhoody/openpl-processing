@@ -14,7 +14,7 @@ Keep a batch checkpoint in `.workflow-state/` with:
 - Data checkout, branch, freshly fetched upstream default branch and tip, fork and target project, MR URL, and submitted head commit.
 - Validation commands/results, pipeline ID/URL and associated commit, required job results, and unresolved decisions with their evidence.
 
-Update the checkpoint after each completed step and before handoff. On resume, inspect the actual branch, files, MR, and pipelines; reconcile them with the checkpoint instead of trusting cached status. Keep credentials in the existing credential manager or environment, outside tracked files and checkpoints. Preserve source files. This workflow installs no global skills, hooks, scheduled jobs, parent-folder instructions, or global configuration.
+Update the checkpoint after each completed step and before handoff. On resume, inspect the actual branch, files, MR, and pipelines; reconcile them with the checkpoint instead of trusting cached status. Keep credentials in the existing credential manager or environment, outside tracked files and checkpoints. Preserve source files. This workflow installs no global skills, hooks, scheduled jobs, parent-folder instructions, or global agent configuration. Install a missing Rust toolchain only as described in step 4.
 
 ## 1. Synchronize upstream — mandatory gate
 
@@ -23,7 +23,7 @@ Run this step first on **every invocation, including resumed and CI-monitoring r
 1. In the sibling checkout, inspect `git status --short --branch`, the current branch, local batch branches, and remotes. Identify any existing batch and submission before creating another. If tracked changes, relevant untracked work, an unfinished Git operation, or conflicts prevent safe synchronization, stop and ask the user to resolve them. Preserve all work; do not automatically stash, discard changes, reset, or force-push.
 2. Discover the original repository's current default branch with `git ls-remote --symref https://gitlab.com/openpowerlifting/opl-data.git HEAD`. Fetch that advertised branch directly from the original URL with `git fetch https://gitlab.com/openpowerlifting/opl-data.git refs/heads/BRANCH`, replacing `BRANCH` with the discovered name. Immediately record `git rev-parse FETCH_HEAD` as the upstream tip. A fetch from the fork alone is insufficient. If discovery or fetch fails, stop; do not use stale refs.
 3. For a new batch, create a uniquely named `ps/<batch>` branch from that exact fetched tip. For an existing batch, switch to its recorded branch and merge that fetched tip into it, preserving batch commits. If the branch exists only on the fork, fetch and resume it rather than starting a replacement. Stop on conflicts and request resolution; leave the work intact.
-4. Require `git merge-base --is-ancestor UPSTREAM_TIP HEAD` to succeed, using the freshly recorded SHA. Record the successful gate in the checkpoint. Until it succeeds, do not convert, edit, repair, validate for submission, or push data. Repeat validation after any upstream merge that changes the branch.
+4. Require `git merge-base --is-ancestor UPSTREAM_TIP HEAD` to succeed, using the freshly recorded SHA. Record the successful gate in the checkpoint. Until it succeeds, do not convert, edit, repair, validate for submission, or push data. Repeat validation after any upstream merge that changes the branch, including the Rust checker provenance and toolchain checks in step 4.
 
 ## 2. Inventory inputs and prevent duplicates
 
@@ -61,7 +61,23 @@ A blank birthdate alone is not an incomplete-meet blocker when source coverage i
 
 For every ready event, verify that all its source days/platforms/sessions are consolidated into exactly one meet/platform record and one folder; that the folder contains the metadata, all original source CSV(s), and final entries; that `MeetName` follows the naming rule above; that the folder year matches the meet date; and that new meet numbers follow the agreed chronological mapping without collisions. Presence alone is insufficient: flag unreadable, empty, header-only, malformed, or truncated required files and incomplete results coverage. Refresh the completeness report with exact affected paths and hold unresolved events out of submission.
 
-In the data checkout, run the fetched upstream checks. Use its current `Makefile`, `tests/`, and `.gitlab-ci.yml` as the source of truth: currently `make check` runs the data and lifter checks, with `tests/check-line-endings` and `tests/check-file-sizes` providing additional CI checks. Verify birthdate handling against the rule above, including the retained column, independent age evidence, and configured division bounds. Run any other required checks selected by the changed files. Record commands and results. A missing dependency, failed check, or unavailable check is a blocker to claiming validation, not a pass.
+In the data checkout, run the fetched upstream checks, including the Rust checker below. Use the current upstream `Makefile`, `tests/`, and `.gitlab-ci.yml` as the source of truth for additional required checks. Verify birthdate handling against the rule above, including the retained column, independent age evidence, and configured division bounds. A missing dependency, failed check, or unavailable check is a blocker to claiming validation, not a pass.
+
+### Rust checker — required and matched to upstream
+
+1. After every synchronization, verify checker build inputs match the freshly fetched **original OpenPL repository**, not just the fork or a saved local revision. From the data checkout, require `git diff --exit-code UPSTREAM_TIP -- checker/ crates/ Cargo.toml Cargo.lock rust-toolchain.toml .cargo/ tests/` to pass, replacing `UPSTREAM_TIP` with the recorded SHA. Inspect untracked source/build overrides too. Stop on unexplained differences; preserve local work rather than overwriting it. A version string alone does not establish a match.
+2. Read the fetched `rust-toolchain.toml` and check `rustc --version`, `cargo --version`, and `rustup show active-toolchain` from the data checkout. If Rust/Cargo or rustup is unavailable, install it using the [official rustup instructions](https://rust-lang.org/tools/install/), then install the repository-pinned toolchain if missing. Respect installation permissions and preserve unrelated user settings. Ensure the active compiler matches the upstream pin, including any required components/targets; environment or directory overrides must not silently select another toolchain. Do not substitute an arbitrary latest/stable compiler or edit the upstream pin/lockfile to make compilation work. If installation, toolchain verification, or dependency retrieval fails, report the blocker instead of skipping Rust validation.
+3. Build and run from the synchronized data checkout using Cargo, so changed upstream source is rebuilt and dependencies stay locked. Do not substitute a globally installed `checker`, an old binary invoked directly, or an unverified prebuilt image. The current commands, run from the checkout root, are:
+
+   ```sh
+   cargo run --locked --release --bin checker -- --project-root . --timing
+   tests/check-lifter-data
+   tests/check-line-endings
+   tests/check-file-sizes
+   ```
+
+   Run any further checks required by the fetched CI configuration. A targeted PS check may help during repairs but does not replace the full required checker run before submission.
+4. Record the upstream SHA, data-branch commit, source-match result, active toolchain/compiler/Cargo versions, commands, and outcomes in `.workflow-state/`. Reverify and rerun after each upstream synchronization and data repair before submission; Cargo may reuse valid build artifacts, but a previous pass is not a current validation result.
 
 Review the entire batch diff against the freshly fetched tip with `git diff --name-status UPSTREAM_TIP...HEAD`, plus staged, unstaged, and untracked changes before committing. Allow only `meet-data/ps/` changes and the specific necessary, evidence-backed PS identity registry edits under `lifter-data/`. Review registry edits row by row for effects on other lifters. Stop on unrelated paths, unexplained deletions, private information, or unsupported edits. Keep workflow documents, local inputs/checkpoints, and generated build artifacts out of the data submission.
 
